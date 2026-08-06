@@ -1,0 +1,27 @@
+Datenschutzerklärung – Video Flip
+
+Diese Browser-Erweiterung sammelt, speichert oder überträgt keinerlei Nutzerdaten.
+
+Die Erweiterung fügt auf drive.google.com, youtube.com sowie im eingebetteten
+Video-Player (youtube.googleapis.com) ausschließlich lokal im Browser einen
+Button hinzu, der das jeweils angezeigte Video per CSS horizontal spiegelt.
+Es findet keine Kommunikation mit externen Servern statt, es werden keine
+Cookies gesetzt, keine Analyse- oder Tracking-Dienste eingebunden und keine
+Informationen gespeichert (weder lokal noch remote).
+
+Kontakt: über das GitHub-Repository dieses Projekts
+
+---
+
+Privacy Policy – Video Flip
+
+This browser extension does not collect, store, or transmit any user data.
+
+The extension only adds a button on drive.google.com, youtube.com, and within
+the embedded video player (youtube.googleapis.com) that flips the currently
+displayed video horizontally using a local CSS transform. It does not
+communicate with any external server, does not set cookies, does not include
+any analytics or tracking, and does not persist any information (locally or
+remotely).
+
+Contact: via this project's GitHub repository
