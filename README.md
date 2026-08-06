@@ -1,36 +1,36 @@
 # Video Flip
 
-Chrome-Erweiterung, die einen Button zum horizontalen Spiegeln von Videos hinzufügt — direkt in der Google-Drive-Vorschau und auf YouTube. Praktisch zum Üben vor dem Spiegel, z. B. bei Sport, Tanz oder Gebärdensprache.
+Chrome extension that adds a button to flip videos horizontally — directly in the Google Drive preview and on YouTube.
 
-## Funktionen
+## Features
 
-- Fügt bei Videos auf `drive.google.com` und `youtube.com` einen kleinen 🪞-Button hinzu
-- Ein Klick spiegelt das Video horizontal, ein weiterer Klick macht es rückgängig
-- Läuft nur auf den genannten Seiten — keine Auswirkung auf andere Webseiten
-- Keine Datenerfassung, keine externen Server, keine Tracking-Dienste (siehe [privacy-policy.txt](./privacy-policy.txt))
+- Adds a small 🪞 button to videos on `drive.google.com` and `youtube.com`
+- One click flips the video horizontally, another click undoes it
+- Only runs on the sites listed above — no effect on any other website
+- No data collection, no external servers, no tracking (see [privacy-policy.txt](./privacy-policy.txt))
 
-## Installation (Entwicklermodus)
+## Installation (developer mode)
 
-1. Dieses Repository klonen oder als ZIP herunterladen
-2. In Chrome `chrome://extensions` öffnen
-3. Oben rechts **Entwicklermodus** aktivieren
-4. **Entpackte Erweiterung laden** auswählen und den Projektordner (`video-flip/`) auswählen
-5. Ein Video auf Google Drive oder YouTube öffnen — der 🪞-Button erscheint automatisch
+1. Clone this repository or download it as a ZIP
+2. Open `chrome://extensions` in Chrome
+3. Enable **Developer mode** in the top right
+4. Click **Load unpacked** and select the project folder (`video-flip/`)
+5. Open a video on Google Drive or YouTube — the 🪞 button appears automatically
 
-## Wie es funktioniert
+## How it works
 
-Google Drive spielt Videos in der Vorschau nicht selbst ab, sondern bettet sie über einen YouTube-Embed-Player in einem iframe ein. Da eine transparente Klick-Ebene von Drive über diesem iframe liegt, kann ein Button innerhalb des iframes nicht angeklickt werden. Video Flip zeichnet den Button deshalb im Elternfenster (auf `drive.google.com`) und kommuniziert per `postMessage` mit dem eingebetteten Player, um das Video dort zu spiegeln. Auf YouTube selbst (`youtube.com`) gibt es dieses Problem nicht, dort spiegelt der Button direkt.
+Google Drive doesn't play videos itself in its preview; it embeds them via a YouTube embed player inside an iframe. Since Drive places a transparent click layer over that iframe, a button inside the iframe can't be clicked. Video Flip therefore renders the button in the parent window (on `drive.google.com`) and communicates with the embedded player via `postMessage` to flip the video there. On YouTube itself (`youtube.com`) this issue doesn't exist, so the button flips the video directly.
 
-## Berechtigungen
+## Permissions
 
-Die Erweiterung läuft ausschließlich auf:
+The extension only runs on:
 
-- `drive.google.com` — um den Button in der Videovorschau anzuzeigen
-- `youtube.com` (inkl. `www.` und `m.`) — um den Button direkt auf YouTube anzuzeigen
-- `youtube.googleapis.com` — der von Google Drive intern genutzte Embed-Player
+- `drive.google.com` — to show the button in the video preview
+- `youtube.com` (including `www.` and `m.`) — to show the button directly on YouTube
+- `youtube.googleapis.com` — the embed player Google Drive uses internally
 
-Keine weiteren Berechtigungen, kein Zugriff auf andere Seiten oder Browserdaten.
+No other permissions, no access to any other sites or browser data.
 
-## Lizenz
+## License
 
 [MIT](./LICENSE)
