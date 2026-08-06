@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="280" viewBox="0 0 440 280">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4285F4"/>
+      <stop offset="1" stop-color="#1a73e8"/>
+    </linearGradient>
+  </defs>
+  <rect width="440" height="280" fill="url(#g)"/>
+  <g transform="translate(30,68) scale(1.05)">
+    <line x1="64" y1="22" x2="64" y2="106" stroke="#ffffff" stroke-width="5" stroke-dasharray="9 9" opacity="0.85" stroke-linecap="round"/>
+    <path d="M48 42 L22 64 L48 86 Z" fill="#ffffff"/>
+    <path d="M80 42 L106 64 L80 86 Z" fill="#ffffff"/>
+  </g>
+  <text x="188" y="144" font-family="DejaVu Sans, Arial, sans-serif" font-size="32" font-weight="700" fill="#ffffff">Video Flip</text>
+  <text x="189" y="172" font-family="DejaVu Sans, Arial, sans-serif" font-size="14" fill="#e8f0fe">Mirror videos horizontally</text>
+</svg>
