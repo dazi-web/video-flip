@@ -3,6 +3,7 @@
   "name": "Video Flip",
   "version": "1.0.0",
   "description": "Spiegelt Videos in der Google Drive-Vorschau und auf YouTube per Klick horizontal. Mirror Google Drive and YouTube videos horizontally with one click.",
+  "homepage_url": "https://github.com/maexware-danny/video-flip",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

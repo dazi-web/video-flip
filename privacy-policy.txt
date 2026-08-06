@@ -9,7 +9,7 @@ Es findet keine Kommunikation mit externen Servern statt, es werden keine
 Cookies gesetzt, keine Analyse- oder Tracking-Dienste eingebunden und keine
 Informationen gespeichert (weder lokal noch remote).
 
-Kontakt: über das GitHub-Repository dieses Projekts
+Kontakt: https://github.com/maexware-danny/video-flip
 
 ---
 
@@ -24,4 +24,4 @@ communicate with any external server, does not set cookies, does not include
 any analytics or tracking, and does not persist any information (locally or
 remotely).
 
-Contact: via this project's GitHub repository
+Contact: https://github.com/maexware-danny/video-flip
