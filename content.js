@@ -36,8 +36,9 @@
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      transition: 'background 0.15s ease',
+      transition: 'background 0.15s ease, opacity 0.25s ease',
       pointerEvents: 'auto',
+      opacity: '0',
     });
     document.body.appendChild(btn);
     return btn;
@@ -46,6 +47,53 @@
   function paintButton(btn, mirrored) {
     btn.style.background = mirrored ? '#1a73e8' : 'rgba(32, 33, 36, 0.75)';
     btn.title = mirrored ? 'Spiegelung aufheben' : 'Video horizontal spiegeln';
+  }
+
+  // Blendet den Button wie eine Steuerleiste ein, solange sich die Maus in
+  // der Nähe des Videos befindet, und nach kurzer Inaktivität wieder aus.
+  function attachAutoHide(btn, getRect) {
+    const HIDE_DELAY = 1800;
+    const MARGIN = 16;
+    let hideTimer = null;
+    let hoveringBtn = false;
+
+    const show = () => {
+      btn.style.opacity = '1';
+    };
+    const hide = () => {
+      if (!hoveringBtn) btn.style.opacity = '0';
+    };
+    const scheduleHide = () => {
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(hide, HIDE_DELAY);
+    };
+
+    btn.addEventListener('mouseenter', () => {
+      hoveringBtn = true;
+      clearTimeout(hideTimer);
+      show();
+    });
+    btn.addEventListener('mouseleave', () => {
+      hoveringBtn = false;
+      scheduleHide();
+    });
+
+    window.addEventListener('mousemove', (event) => {
+      const rect = getRect();
+      if (!rect) return;
+      const within =
+        event.clientX >= rect.left - MARGIN &&
+        event.clientX <= rect.right + MARGIN &&
+        event.clientY >= rect.top - MARGIN &&
+        event.clientY <= rect.bottom + MARGIN;
+      if (within) {
+        show();
+        scheduleHide();
+      }
+    });
+
+    show();
+    scheduleHide();
   }
 
   function trackRect(btn, getRect) {
@@ -76,6 +124,7 @@
     let mirrored = false;
     paintButton(btn, mirrored);
     trackRect(btn, () => video.getBoundingClientRect());
+    attachAutoHide(btn, () => video.getBoundingClientRect());
 
     btn.addEventListener('click', (event) => {
       event.preventDefault();
@@ -146,6 +195,7 @@
       let mirrored = false;
       paintButton(btn, mirrored);
       trackRect(btn, () => iframe.getBoundingClientRect());
+      attachAutoHide(btn, () => iframe.getBoundingClientRect());
 
       const cleanupCheck = setInterval(() => {
         if (!document.contains(iframe)) {
