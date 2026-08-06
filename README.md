@@ -33,4 +33,4 @@ Keine weiteren Berechtigungen, kein Zugriff auf andere Seiten oder Browserdaten.
 
 ## Lizenz
 
-Noch nicht festgelegt — vor Veröffentlichung des Repos eine Lizenz ergänzen (z. B. MIT).
+[MIT](./LICENSE)
