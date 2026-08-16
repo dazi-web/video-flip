@@ -49,6 +49,21 @@
     btn.title = mirrored ? 'Spiegelung aufheben' : 'Video horizontal spiegeln';
   }
 
+  // Hält den Button sichtbar, wenn die Seite in den Vollbildmodus wechselt:
+  // Der Browser rendert per Spezifikation nur Nachfahren des Vollbild-Elements,
+  // ein an document.body hängender Button würde sonst spurlos verschwinden.
+  function keepVisibleDuringFullscreen(btn) {
+    const homeParent = btn.parentElement || document.body;
+    document.addEventListener('fullscreenchange', () => {
+      const target = document.fullscreenElement;
+      if (target && btn.parentElement !== target) {
+        target.appendChild(btn);
+      } else if (!target && btn.parentElement !== homeParent) {
+        homeParent.appendChild(btn);
+      }
+    });
+  }
+
   // Blendet den Button wie eine Steuerleiste ein, solange sich die Maus in
   // der Nähe des Videos befindet, und nach kurzer Inaktivität wieder aus.
   function attachAutoHide(btn, getRect) {
@@ -113,7 +128,73 @@
     window.addEventListener('scroll', reposition, true);
   }
 
-  // Fall A: eigenständige Seite mit direktem <video> (z.B. youtube.com/watch).
+  const TOOLBAR_BTN_CLASS = 'mirror-ext-toolbar-button';
+
+  // Ermittelt, ob ein <video> zum echten YouTube-Player gehört (dann kann der
+  // Button in dessen eigene Werkzeugleiste eingehängt werden), zu einer der
+  // vielen Vorschau-Mini-Player (Hover-Preview auf Thumbnails, Shorts-Regal
+  // usw. - dort soll gar kein Button erscheinen, das war die Quelle der
+  // "doppelten" Spiegel-Buttons) oder zu keinem YouTube-Player gehört (dann
+  // greift der schwebende Fallback-Button).
+  function classifyYoutubePlayer(video) {
+    const player = video.closest('.html5-video-player');
+    if (!player) return { kind: 'none' };
+    if (
+      /preview/i.test(player.id) ||
+      player.closest('ytd-video-preview') ||
+      player.closest('ytd-thumbnail')
+    ) {
+      return { kind: 'preview' };
+    }
+    const toolbar = player.querySelector('.ytp-right-controls');
+    return toolbar ? { kind: 'toolbar', toolbar } : { kind: 'none' };
+  }
+
+  function createToolbarButton() {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `ytp-button ${TOOLBAR_BTN_CLASS}`;
+    btn.style.fontSize = '18px';
+    btn.style.lineHeight = '1';
+    btn.textContent = '🪞';
+    return btn;
+  }
+
+  function paintToolbarButton(btn, mirrored) {
+    btn.style.opacity = mirrored ? '1' : '0.75';
+    btn.title = mirrored ? 'Spiegelung aufheben' : 'Video horizontal spiegeln';
+  }
+
+  // Fügt den Button direkt in YouTubes eigene Werkzeugleiste ein (neben
+  // Einstellungen/Vollbild). Das löst beide gemeldeten Probleme zugleich:
+  // Es gibt nur einen Button pro echtem Player (idempotente Prüfung statt
+  // einmaliger Markierung, damit ein von YouTube neu gezeichneter Player-DOM
+  // den Button automatisch zurückbekommt), und der Button bleibt im
+  // Vollbildmodus sichtbar, weil er Teil des Elements ist, das YouTube
+  // tatsächlich in den Vollbildmodus versetzt.
+  function ensureYoutubeToolbarButton(video, toolbar) {
+    let btn = toolbar.querySelector(`:scope > .${TOOLBAR_BTN_CLASS}`);
+    if (!btn) {
+      btn = createToolbarButton();
+      btn.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const mirrored = video.style.transform !== 'scaleX(-1)';
+        video.style.transform = mirrored ? 'scaleX(-1)' : '';
+        paintToolbarButton(btn, mirrored);
+      });
+      video.addEventListener('emptied', () => {
+        video.style.transform = '';
+        paintToolbarButton(btn, false);
+      });
+      const anchor = toolbar.querySelector('.ytp-right-controls-left');
+      toolbar.insertBefore(btn, anchor ? anchor.nextSibling : toolbar.firstChild);
+    }
+    paintToolbarButton(btn, video.style.transform === 'scaleX(-1)');
+  }
+
+  // Fall A: eigenständige Seite mit direktem <video> (z.B. youtube.com/watch),
+  // aber ohne erkennbare Werkzeugleiste (z.B. abweichendes mobiles Layout).
   // Hier gibt es keine fremde Klick-Ebene, die den Button verdecken könnte,
   // also wird direkt geklickt und direkt am Video gespiegelt.
   function attachStandaloneButton(video) {
@@ -121,6 +202,7 @@
     video.setAttribute(PROCESSED_ATTR, 'true');
 
     const btn = createFloatingButton();
+    keepVisibleDuringFullscreen(btn);
     let mirrored = false;
     paintButton(btn, mirrored);
     trackRect(btn, () => video.getBoundingClientRect());
@@ -143,7 +225,15 @@
 
   function setupStandalone() {
     function scan() {
-      findVideos().forEach(attachStandaloneButton);
+      findVideos().forEach((video) => {
+        const info = classifyYoutubePlayer(video);
+        if (info.kind === 'preview') return;
+        if (info.kind === 'toolbar') {
+          ensureYoutubeToolbarButton(video, info.toolbar);
+          return;
+        }
+        attachStandaloneButton(video);
+      });
     }
     scan();
     new MutationObserver(scan).observe(document.documentElement, { childList: true, subtree: true });
@@ -192,6 +282,7 @@
       processed.add(iframe);
 
       const btn = createFloatingButton();
+      keepVisibleDuringFullscreen(btn);
       let mirrored = false;
       paintButton(btn, mirrored);
       trackRect(btn, () => iframe.getBoundingClientRect());
