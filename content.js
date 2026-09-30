@@ -17,6 +17,26 @@
     return results;
   }
 
+  // Räumt Listener, Intervalle und Button eines Controllers auf, sobald das
+  // zugehörige Element nicht mehr im DOM ist.
+  function onAbort(signal, fn) {
+    signal.addEventListener('abort', fn, { once: true });
+  }
+
+  function largestVisibleVideo(videos) {
+    let best = null;
+    let bestArea = -1;
+    videos.forEach((v) => {
+      const r = v.getBoundingClientRect();
+      const area = r.width * r.height;
+      if (area > bestArea) {
+        best = v;
+        bestArea = area;
+      }
+    });
+    return best;
+  }
+
   function createFloatingButton() {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -52,21 +72,25 @@
   // Hält den Button sichtbar, wenn die Seite in den Vollbildmodus wechselt:
   // Der Browser rendert per Spezifikation nur Nachfahren des Vollbild-Elements,
   // ein an document.body hängender Button würde sonst spurlos verschwinden.
-  function keepVisibleDuringFullscreen(btn) {
+  function keepVisibleDuringFullscreen(btn, signal) {
     const homeParent = btn.parentElement || document.body;
-    document.addEventListener('fullscreenchange', () => {
-      const target = document.fullscreenElement;
-      if (target && btn.parentElement !== target) {
-        target.appendChild(btn);
-      } else if (!target && btn.parentElement !== homeParent) {
-        homeParent.appendChild(btn);
-      }
-    });
+    document.addEventListener(
+      'fullscreenchange',
+      () => {
+        const target = document.fullscreenElement;
+        if (target && btn.parentElement !== target) {
+          target.appendChild(btn);
+        } else if (!target && btn.parentElement !== homeParent) {
+          homeParent.appendChild(btn);
+        }
+      },
+      { signal }
+    );
   }
 
   // Blendet den Button wie eine Steuerleiste ein, solange sich die Maus in
   // der Nähe des Videos befindet, und nach kurzer Inaktivität wieder aus.
-  function attachAutoHide(btn, getRect) {
+  function attachAutoHide(btn, getRect, signal) {
     const HIDE_DELAY = 1800;
     const MARGIN = 16;
     let hideTimer = null;
@@ -93,25 +117,30 @@
       scheduleHide();
     });
 
-    window.addEventListener('mousemove', (event) => {
-      const rect = getRect();
-      if (!rect) return;
-      const within =
-        event.clientX >= rect.left - MARGIN &&
-        event.clientX <= rect.right + MARGIN &&
-        event.clientY >= rect.top - MARGIN &&
-        event.clientY <= rect.bottom + MARGIN;
-      if (within) {
-        show();
-        scheduleHide();
-      }
-    });
+    window.addEventListener(
+      'mousemove',
+      (event) => {
+        const rect = getRect();
+        if (!rect) return;
+        const within =
+          event.clientX >= rect.left - MARGIN &&
+          event.clientX <= rect.right + MARGIN &&
+          event.clientY >= rect.top - MARGIN &&
+          event.clientY <= rect.bottom + MARGIN;
+        if (within) {
+          show();
+          scheduleHide();
+        }
+      },
+      { signal }
+    );
+    onAbort(signal, () => clearTimeout(hideTimer));
 
     show();
     scheduleHide();
   }
 
-  function trackRect(btn, getRect) {
+  function trackRect(btn, getRect, signal) {
     const reposition = () => {
       const rect = getRect();
       if (!rect || rect.width === 0 || rect.height === 0) {
@@ -123,12 +152,14 @@
       btn.style.left = `${rect.right - 52}px`;
     };
     reposition();
-    setInterval(reposition, 300);
-    window.addEventListener('resize', reposition);
-    window.addEventListener('scroll', reposition, true);
+    const timer = setInterval(reposition, 300);
+    onAbort(signal, () => clearInterval(timer));
+    window.addEventListener('resize', reposition, { signal });
+    window.addEventListener('scroll', reposition, { capture: true, signal });
   }
 
   const TOOLBAR_BTN_CLASS = 'mirror-ext-toolbar-button';
+  const emptiedBound = new WeakSet();
 
   // Ermittelt, ob ein <video> zum echten YouTube-Player gehört (dann kann der
   // Button in dessen eigene Werkzeugleiste eingehängt werden), zu einer der
@@ -147,7 +178,8 @@
       return { kind: 'preview' };
     }
     const toolbar = player.querySelector('.ytp-right-controls');
-    return toolbar ? { kind: 'toolbar', toolbar } : { kind: 'none' };
+    // Player existiert, Werkzeugleiste ist aber (noch) nicht gerendert.
+    return toolbar ? { kind: 'toolbar', toolbar } : { kind: 'pending' };
   }
 
   function createToolbarButton() {
@@ -179,16 +211,25 @@
       btn.addEventListener('click', (event) => {
         event.preventDefault();
         event.stopPropagation();
-        const mirrored = video.style.transform !== 'scaleX(-1)';
-        video.style.transform = mirrored ? 'scaleX(-1)' : '';
+        // Immer das aktuell zugeordnete <video>, YouTube kann es austauschen.
+        const target = btn.mirrorVideo;
+        const mirrored = target.style.transform !== 'scaleX(-1)';
+        target.style.transform = mirrored ? 'scaleX(-1)' : '';
         paintToolbarButton(btn, mirrored);
-      });
-      video.addEventListener('emptied', () => {
-        video.style.transform = '';
-        paintToolbarButton(btn, false);
       });
       const anchor = toolbar.querySelector('.ytp-right-controls-left');
       toolbar.insertBefore(btn, anchor ? anchor.nextSibling : toolbar.firstChild);
+    }
+    btn.mirrorVideo = video;
+    if (!emptiedBound.has(video)) {
+      emptiedBound.add(video);
+      video.addEventListener('emptied', () => {
+        video.style.transform = '';
+        const current = video
+          .closest('.html5-video-player')
+          ?.querySelector(`.${TOOLBAR_BTN_CLASS}`);
+        if (current) paintToolbarButton(current, false);
+      });
     }
     paintToolbarButton(btn, video.style.transform === 'scaleX(-1)');
   }
@@ -197,16 +238,31 @@
   // aber ohne erkennbare Werkzeugleiste (z.B. abweichendes mobiles Layout).
   // Hier gibt es keine fremde Klick-Ebene, die den Button verdecken könnte,
   // also wird direkt geklickt und direkt am Video gespiegelt.
+  const standalone = new Map(); // video -> AbortController
+
+  function detachStandaloneButton(video) {
+    const ctrl = standalone.get(video);
+    if (!ctrl) return;
+    ctrl.abort();
+    standalone.delete(video);
+    video.removeAttribute(PROCESSED_ATTR);
+  }
+
   function attachStandaloneButton(video) {
     if (video.hasAttribute(PROCESSED_ATTR)) return;
     video.setAttribute(PROCESSED_ATTR, 'true');
 
+    const ctrl = new AbortController();
+    const { signal } = ctrl;
+    standalone.set(video, ctrl);
+
     const btn = createFloatingButton();
-    keepVisibleDuringFullscreen(btn);
+    onAbort(signal, () => btn.remove());
+    keepVisibleDuringFullscreen(btn, signal);
     let mirrored = false;
     paintButton(btn, mirrored);
-    trackRect(btn, () => video.getBoundingClientRect());
-    attachAutoHide(btn, () => video.getBoundingClientRect());
+    trackRect(btn, () => video.getBoundingClientRect(), signal);
+    attachAutoHide(btn, () => video.getBoundingClientRect(), signal);
 
     btn.addEventListener('click', (event) => {
       event.preventDefault();
@@ -216,27 +272,59 @@
       paintButton(btn, mirrored);
     });
 
-    video.addEventListener('emptied', () => {
-      mirrored = false;
-      video.style.transform = '';
-      paintButton(btn, mirrored);
-    });
+    video.addEventListener(
+      'emptied',
+      () => {
+        mirrored = false;
+        video.style.transform = '';
+        paintButton(btn, mirrored);
+      },
+      { signal }
+    );
   }
 
   function setupStandalone() {
+    const PENDING_GRACE_MS = 5000;
+    const pendingSince = new WeakMap();
+
     function scan() {
+      standalone.forEach((_ctrl, video) => {
+        if (!video.isConnected) detachStandaloneButton(video);
+      });
       findVideos().forEach((video) => {
         const info = classifyYoutubePlayer(video);
         if (info.kind === 'preview') return;
         if (info.kind === 'toolbar') {
+          // Toolbar ist da: ein evtl. zuvor angelegter schwebender Button entfällt.
+          detachStandaloneButton(video);
           ensureYoutubeToolbarButton(video, info.toolbar);
           return;
+        }
+        if (info.kind === 'pending') {
+          // YouTube rendert die Werkzeugleiste kurz nach dem Player; erst nach
+          // einer Karenzzeit auf den schwebenden Button zurückfallen.
+          const since = pendingSince.get(video) ?? Date.now();
+          pendingSince.set(video, since);
+          if (Date.now() - since < PENDING_GRACE_MS) return;
         }
         attachStandaloneButton(video);
       });
     }
+
+    let scanTimer = null;
+    function scheduleScan() {
+      if (scanTimer) return;
+      scanTimer = setTimeout(() => {
+        scanTimer = null;
+        scan();
+      }, 250);
+    }
+
     scan();
-    new MutationObserver(scan).observe(document.documentElement, { childList: true, subtree: true });
+    new MutationObserver(scheduleScan).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
     setInterval(scan, 1500);
   }
 
@@ -250,11 +338,11 @@
     window.addEventListener('message', (event) => {
       const data = event.data;
       if (!data || data[MSG_TOGGLE] !== true) return;
+      if (event.source !== window.parent) return;
 
-      const videos = findVideos();
-      if (!videos.length) return;
+      const video = largestVisibleVideo(findVideos());
+      if (!video) return;
 
-      const video = videos[0];
       const mirrored = !mirroredState.get(video);
       mirroredState.set(video, mirrored);
       video.style.transform = mirrored ? 'scaleX(-1)' : '';
@@ -274,24 +362,27 @@
 
     function isVideoFrame(iframe) {
       const src = iframe.getAttribute('src') || '';
-      return /(^|\.)youtube\.com\/embed|youtube\.googleapis\.com\/embed/.test(src);
+      return /(^|\/\/|\.)youtube\.com\/embed|youtube\.googleapis\.com\/embed/.test(src);
     }
 
     function attachToIframe(iframe) {
       if (processed.has(iframe)) return;
       processed.add(iframe);
 
+      const ctrl = new AbortController();
+      const { signal } = ctrl;
       const btn = createFloatingButton();
-      keepVisibleDuringFullscreen(btn);
+      onAbort(signal, () => btn.remove());
+      keepVisibleDuringFullscreen(btn, signal);
       let mirrored = false;
       paintButton(btn, mirrored);
-      trackRect(btn, () => iframe.getBoundingClientRect());
-      attachAutoHide(btn, () => iframe.getBoundingClientRect());
+      trackRect(btn, () => iframe.getBoundingClientRect(), signal);
+      attachAutoHide(btn, () => iframe.getBoundingClientRect(), signal);
 
       const cleanupCheck = setInterval(() => {
         if (!document.contains(iframe)) {
           clearInterval(cleanupCheck);
-          btn.remove();
+          ctrl.abort();
         }
       }, 300);
 
@@ -301,13 +392,17 @@
         iframe.contentWindow.postMessage({ [MSG_TOGGLE]: true }, '*');
       });
 
-      window.addEventListener('message', (event) => {
-        if (event.source !== iframe.contentWindow) return;
-        const data = event.data;
-        if (!data || data[MSG_STATE] !== true) return;
-        mirrored = !!data.mirrored;
-        paintButton(btn, mirrored);
-      });
+      window.addEventListener(
+        'message',
+        (event) => {
+          if (event.source !== iframe.contentWindow) return;
+          const data = event.data;
+          if (!data || data[MSG_STATE] !== true) return;
+          mirrored = !!data.mirrored;
+          paintButton(btn, mirrored);
+        },
+        { signal }
+      );
     }
 
     function scanIframes() {
@@ -327,12 +422,12 @@
     setInterval(scanIframes, 1500);
   }
 
-  if (findVideos().length > 0) {
-    if (window.top === window.self) {
-      setupStandalone();
-    } else {
-      setupEmbeddedVideoHost();
-    }
+  // Bedingungslos einrichten: Das <video> kann erst nach document_idle
+  // entstehen; die Handler reagieren selbst, sobald eines existiert.
+  if (window.top === window.self) {
+    setupStandalone();
+  } else {
+    setupEmbeddedVideoHost();
   }
   setupIframeController();
 })();
